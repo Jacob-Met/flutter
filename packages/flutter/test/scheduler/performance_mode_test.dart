@@ -5,16 +5,35 @@
 import 'dart:ui';
 
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:leak_tracker_flutter_testing/leak_tracker_flutter_testing.dart';
 
-void main() {
-  late SchedulerBinding binding;
+class _RecordingPlatformDispatcher extends TestPlatformDispatcher {
+  _RecordingPlatformDispatcher({required super.platformDispatcher});
 
-  setUpAll(() {
-    WidgetsFlutterBinding.ensureInitialized();
-    binding = SchedulerBinding.instance;
+  final List<DartPerformanceMode> requests = <DartPerformanceMode>[];
+
+  @override
+  void requestDartPerformanceMode(DartPerformanceMode mode) {
+    requests.add(mode);
+    super.requestDartPerformanceMode(mode);
+  }
+}
+
+class _PerformanceModeTestBinding extends AutomatedTestWidgetsFlutterBinding {
+  late final _RecordingPlatformDispatcher _platformDispatcher = _RecordingPlatformDispatcher(
+    platformDispatcher: super.platformDispatcher,
+  );
+
+  @override
+  _RecordingPlatformDispatcher get platformDispatcher => _platformDispatcher;
+}
+
+void main() {
+  final binding = _PerformanceModeTestBinding();
+
+  setUp(() {
+    binding.platformDispatcher.requests.clear();
   });
 
   test('PerformanceModeHandler make one request', () async {
@@ -23,8 +42,13 @@ void main() {
     );
     expect(requestHandle, isNotNull);
     expect(binding.debugGetRequestedPerformanceMode(), equals(DartPerformanceMode.latency));
+    expect(binding.platformDispatcher.requests, <DartPerformanceMode>[DartPerformanceMode.latency]);
     requestHandle?.dispose();
     expect(binding.debugGetRequestedPerformanceMode(), isNull);
+    expect(binding.platformDispatcher.requests, <DartPerformanceMode>[
+      DartPerformanceMode.latency,
+      DartPerformanceMode.balanced,
+    ]);
   });
 
   test('PerformanceModeHandler make conflicting requests', () async {
@@ -39,9 +63,14 @@ void main() {
     expect(requestHandle2, isNull);
 
     expect(binding.debugGetRequestedPerformanceMode(), equals(DartPerformanceMode.latency));
+    expect(binding.platformDispatcher.requests, <DartPerformanceMode>[DartPerformanceMode.latency]);
 
     requestHandle1?.dispose();
     expect(binding.debugGetRequestedPerformanceMode(), isNull);
+    expect(binding.platformDispatcher.requests, <DartPerformanceMode>[
+      DartPerformanceMode.latency,
+      DartPerformanceMode.balanced,
+    ]);
   });
 
   test('PerformanceModeHandler revert only after last requestor disposed', () async {
@@ -62,6 +91,10 @@ void main() {
     expect(binding.debugGetRequestedPerformanceMode(), equals(DartPerformanceMode.latency));
     requestHandle2?.dispose();
     expect(binding.debugGetRequestedPerformanceMode(), isNull);
+    expect(binding.platformDispatcher.requests, <DartPerformanceMode>[
+      DartPerformanceMode.latency,
+      DartPerformanceMode.balanced,
+    ]);
   });
 
   test('PerformanceModeRequestHandle dispatches memory events', () async {
