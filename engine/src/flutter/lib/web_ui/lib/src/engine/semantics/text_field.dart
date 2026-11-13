@@ -431,6 +431,9 @@ class SemanticTextField extends SemanticRole {
       'click',
       createDomEventListener((DomEvent event) {
         editableElement.focusWithoutScroll();
+        // A standalone accessibility click must not activate a tappable ancestor.
+        // Pointer clicks are already handled by Flutter's gesture system.
+        event.stopPropagation();
       }),
     );
     editableElement.addEventListener(

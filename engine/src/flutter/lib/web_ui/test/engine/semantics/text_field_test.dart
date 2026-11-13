@@ -215,6 +215,44 @@ void testMain() {
       expect(owner().semanticsHost.ownerDocument?.activeElement, isNot(textField));
     });
 
+    test('clicking a text field does not activate a tappable ancestor', () {
+      final capturedActions = <ui.SemanticsActionEvent>[];
+      EnginePlatformDispatcher.instance.onSemanticsActionEvent = capturedActions.add;
+
+      final tester = SemanticsTester(owner());
+      tester.updateNode(
+        id: 0,
+        hasTap: true,
+        flags: const ui.SemanticsFlags(isEnabled: ui.Tristate.isTrue),
+        rect: const ui.Rect.fromLTRB(0, 0, 100, 50),
+        children: <SemanticsNodeUpdate>[
+          tester.updateNode(
+            id: 1,
+            flags: const ui.SemanticsFlags(
+              isEnabled: ui.Tristate.isTrue,
+              isTextField: true,
+              isFocused: ui.Tristate.isFalse,
+            ),
+            rect: const ui.Rect.fromLTRB(0, 0, 100, 50),
+          ),
+        ],
+      );
+      tester.apply();
+
+      final DomHTMLElement input = tester.getTextField(1).editableElement;
+      final DomRect rect = input.getBoundingClientRect();
+      input.dispatchEvent(
+        createDomMouseEvent('click', <Object?, Object?>{
+          'bubbles': true,
+          'clientX': (rect.left + rect.right) / 2,
+          'clientY': (rect.top + rect.bottom) / 2,
+        }),
+      );
+
+      expect(domDocument.activeElement, input);
+      expect(capturedActions.where((event) => event.type == ui.SemanticsAction.tap), isEmpty);
+    });
+
     test('Syncs semantic state from framework', () async {
       expect(owner().semanticsHost.ownerDocument?.activeElement, domDocument.body);
 
